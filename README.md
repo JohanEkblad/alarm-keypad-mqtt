@@ -25,9 +25,7 @@ Lights:
 * a fast blinking red light - "Delay exit" (waiting before arming and sending ALARM_MODE_ON) or "Delay entry" (turn off alarm and wating for enter the correct code)
 * A red light turns on and off once - various error conditions, for example wrong code entered
 
-Example how to integrate with Home Assistant:
-
-Enter the following in `config/configuration.yaml`:
+Example how to integrate with Home Assistant, enter the following in `config/configuration.yaml`:
 ```
 switch:
   - platform: mqtt
@@ -49,14 +47,14 @@ switch:
     retain: true
 ```
 
-If you for example have a magnet sensor on the front door, you might want to send a MQTT message to the Keypad to enter "delayed entry" mode, in this case just add the following in the `config/automations.yaml`:
+If you have a magnet sensor on the front door, you might want to send a MQTT message to the Keypad to enter "delayed entry" mode, in this case just add the following in the `config/automations.yaml`:
 ```
 - alias: Trigger delay entry mode for alarm
   description: ''
   trigger:
   - type: opened
     platform: device
-    device_id: my-magnet-sensor-id
+    device_id: my_sensor_magnet_id
     entity_id: my_sensor_magnet_on_off
     domain: binary_sensor
   condition: []
