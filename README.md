@@ -1,6 +1,8 @@
 # alarm-keypad-mqtt
 A program written for arduino ethernet, having a keypad and two light diodes connected. It is sending and receiving MQTT messages and is used to control an alarm. An example how to integrate with Home Assistant is provided. You can save up to nine different alarm codes in the EEPROM.
 
+![Keypad setup](https://ekblad.org/keypad.jpg)
+
 Keypad commands:
 
 * "\*" - Turn on alarm mode, result: send ALARM_MODE_ON (if delayExit > 0 wait delayExit seconds before sending ALARM_MODE_ON, Press '\*' again to cancel before time is out)
