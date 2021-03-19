@@ -3,9 +3,9 @@ A program written for arduino ethernet, having a keypad and two light diodes con
 
 Keypad commands:
 
-* "*" - Turn on alarm mode, result: send ALARM_MODE_ON (if delayExit > 0 wait delayExit seconds before sending ALARM_MODE_ON, Press '*' again to cancel before time is out)
-* "CODE*" - Turn off alarm and alarm mode, (CODE is 1-9 digits), sends: CODE_FAIL,TURN_ON_ALARM (third time wrong code is entered) or (ALARM_MODE_OFF and ALARM_OFF)
-* "#CODE*P*NEW_CODE*" - Store NEW_CODE (1-9 digits) in register P (P is 1-MAX_NUMBER_OF_CODES), send: CODE_CHANGED, OPERATION_FAILED, CODE_FAIL, TURN_ON_ALARM (third time wrong code is entered)
+* "\*" - Turn on alarm mode, result: send ALARM_MODE_ON (if delayExit > 0 wait delayExit seconds before sending ALARM_MODE_ON, Press '\*' again to cancel before time is out)
+* "CODE\*" - Turn off alarm and alarm mode, (CODE is 1-9 digits), sends: CODE_FAIL,TURN_ON_ALARM (third time wrong code is entered) or (ALARM_MODE_OFF and ALARM_OFF)
+* "#CODE\*P\*NEW_CODE\*" - Store NEW_CODE (1-9 digits) in register P (P is 1-MAX_NUMBER_OF_CODES), send: CODE_CHANGED, OPERATION_FAILED, CODE_FAIL, TURN_ON_ALARM (third time wrong code is entered)
 
 If delayEntry > 0 and the MQTT message MQTT_ENTER_PAYLOAD is recieved in the MQTT_TOPIC_IN topic and we are armed, Send ALARM_MODE_OFF and ALARM_OFF and wait for delayEntry seconds. If a correct code is not entered during that time, send ALARM_MODE_ON, ALARM_ON.
 
