@@ -105,10 +105,10 @@ boolean green_status;
 int     red_count=0;
 boolean red_status;
 
-int     delayEntry=10; // If the MQTT message ENTER is recieved in the keypad_in topic, Turn off ALARM_MODE_OFF
+int     delayEntry=60; // If the MQTT message ENTER is recieved in the keypad_in topic, Turn off ALARM_MODE_OFF
                        // (+ ALARM_OFF ?) for delayEntry seconds if not the right code is entered 
                        // turn on alarm ALARM_ON
-int     delayExit=10;  // If '*' is pressed at the keypad, wait for delayExit seconds before the 
+int     delayExit=60;  // If '*' is pressed at the keypad, wait for delayExit seconds before the 
                        // ALARM_MODE_ON is sent
 
 unsigned long currentDelayEntry = 0;
@@ -155,7 +155,9 @@ void callback(char* topic, byte* payload, unsigned int length) {
       sendCommand(ALARM_MODE_OFF, 9);
     }
   } else if (strcmp(MQTT_ALARM_MODE_ON,payloadstr) == 0) {
-    light_mode=2+(light_mode % 2);
+    if ((light_mode / 4) != 1) { // Skip arming if already in alarm mode
+      light_mode=2+(light_mode % 2);
+    }
     reset_data(payloadstr);
     currentDelayExit=0;
     updateDiode(RED_PIN, HIGH);
@@ -163,6 +165,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   } else if (strcmp(MQTT_ALARM_ON,payloadstr) == 0) {  
     light_mode=4+(light_mode % 2);
     reset_data(payloadstr);
+    sendCommand(ALARM_MODE_ON, 9);
     sendCommand(ALARM_ON, 9);
   } else {
     Serial.print("Skip payload ");
