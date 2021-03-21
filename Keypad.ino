@@ -391,6 +391,7 @@ void state_enter_alarm_code() {
       failed_attempts++;
       if (failed_attempts >= MAX_NUMBER_OF_FAILED_ATTEMPTS) {
         sendCommand(ALARM_ON, 0);
+        currentDelayEntry=0;
       } else {
         sendCommand(CODE_FAIL, failed_attempts);
         mark_error();
