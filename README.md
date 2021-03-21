@@ -9,13 +9,15 @@ Keypad commands:
 * "CODE\*" - Turn off alarm and alarm mode, (CODE is 1-9 digits), sends: CODE_FAIL,TURN_ON_ALARM (third time wrong code is entered) or (ALARM_MODE_OFF and ALARM_OFF)
 * "#CODE\*P\*NEW_CODE\*" - Store NEW_CODE (1-9 digits) in register P (P is 1-MAX_NUMBER_OF_CODES), send: CODE_CHANGED, OPERATION_FAILED, CODE_FAIL, TURN_ON_ALARM (third time wrong code is entered)
 
-If delayEntry > 0 and the MQTT message MQTT_ENTER_PAYLOAD is recieved in the MQTT_TOPIC_IN topic and we are armed, Send ALARM_MODE_OFF and ALARM_OFF and wait for delayEntry seconds. If a correct code is not entered during that time, send ALARM_MODE_ON, ALARM_ON.
+If delayEntry > 0 and the MQTT message "ENTER" is recieved in the MQTT_TOPIC_IN topic and we are armed, Send ALARM_MODE_OFF and ALARM_OFF and wait for delayEntry seconds. If a correct code is not entered during that time, send ALARM_MODE_ON, ALARM_ON.
 
 If no code is stored in any register, the default CODE is 12345678
 
-The Keypad communicates with a MQTT server, it subscribes to topic MQTT_TOPIC_IN and send data to topic MQTT_TOPIC_OUT
+The Keypad communicates with a MQTT server, it subscribes to topic MQTT_TOPIC_IN and send data to topic MQTT_TOPIC_OUT. The Keypad recieves some MQTT-messages from the server, ENTER (for delayed entry), ALARM_MODE_ON, ALARM_MODE_OFF, ALARM_ON, ALARM_OFF (and update the Keypad status accordingly) 
 
-The Keypad assumes a red light diode is connected to A0 (Analog pin 0) and a green light diode is connected to A1 (Each light diode also have a 200 ohm resistor and is connected to ground)
+The Keypad assumes a red light diode is connected to A0 (Analog pin 0) and a green light diode is connected to A1 (Each light diode also have a 220 ohm resistor and is connected to ground)
+
+I'm using a 12 keys keypad, connect keypad pin 1-7 to arduino digital pin 9-3
 
 Lights:
 
