@@ -13,7 +13,9 @@ If delayEntry > 0 and the MQTT message "ENTER" is recieved in the MQTT_TOPIC_IN 
 
 If no code is stored in any register, the default CODE is 12345678
 
-The Keypad communicates with a MQTT server, it subscribes to topic MQTT_TOPIC_IN and send data to topic MQTT_TOPIC_OUT. The Keypad recieves some MQTT-messages from the server, ENTER (for delayed entry), ALARM_MODE_ON, ALARM_MODE_OFF, ALARM_ON, ALARM_OFF (and update the Keypad status accordingly) 
+The Keypad communicates with a MQTT server, it subscribes to topic MQTT_TOPIC_IN and send data to topic MQTT_TOPIC_OUT. The Keypad recieves some MQTT-messages from the server, ENTER (for delayed entry), ALARM_MODE_ON, ALARM_MODE_OFF, ALARM_ON, ALARM_OFF (and update the Keypad status accordingly)
+
+There is a "watchdog" running (default every minute) that's checking the connection to the MQTT server. If the connection is down, the Ethernet connection (default using DHCP) and connection to the MQTT server is trying to be set up again. 
 
 The Keypad assumes a red light diode is connected to A0 (Analog pin 0) and a green light diode is connected to A1 (Each light diode also have a 220 ohm resistor and is connected to ground)
 
