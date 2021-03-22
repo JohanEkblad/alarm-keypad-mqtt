@@ -114,6 +114,9 @@ int     delayExit=60;  // If '*' is pressed at the keypad, wait for delayExit se
 unsigned long currentDelayEntry = 0;
 unsigned long currentDelayExit = 0;                   
 
+int     networkWatchdog=60; // Check network 
+unsigned long currentNetworkWatchdog = 0;
+
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
 
@@ -350,7 +353,17 @@ void checkDelayedActions() {
       sendCommand(ALARM_ON, 0);
       currentDelayEntry=0;
     }
-  }  
+  }
+
+  if (networkWatchdog > 0) {
+    if ((currentNetworkWatchdog + ((long) networkWatchdog)*1000L) < millis()) {
+      Serial.println("Network watchdog");
+      if (!connectMQTT()) {
+        ip_and_mqtt_setup();
+      }
+      currentNetworkWatchdog=millis();
+    }
+  }
 }
 
 void mark_error() {
@@ -457,16 +470,37 @@ void state_enter_new_code() {
   operation_mode=ENTER_ALARM_CODE;
 }
 
-void setup() {
-  Serial.begin(9600);
-
-  //Fixed ip, gw and subnetmask (saves 114 bytes in Global variables memory)
+void ip_and_mqtt_setup() {
+    //Fixed ip, gw and subnetmask (saves 114 bytes in Global variables memory)
   //IPAddress myIP(192, 168, 10, 5);
   //IPAddress gateway(192, 168, 10, 1);
   //IPAddress subnet(255, 255, 255, 0);
   //Ethernet.begin(mac, myIP, gateway, subnet);
   
   Ethernet.begin(mac); // Reserves digital pin 10,11,12,13 
+
+  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
+  mqttClient.setCallback(callback);
+
+  int retrycount=1;
+  boolean is_connected=false;
+  while (retrycount <= 10 && !is_connected)
+  {
+    delay(retrycount*1000L);
+    if (connectMQTT()) {
+      Serial.println("Connected to MQTT server");
+      light_mode=0;
+      is_connected=true;
+    } else {
+      light_mode=1;
+    }
+    retrycount++;
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
 
   readEEPROMString(1);
   if (strlen(codes[0]) == 0) /* You must have code 1 set otherwise set default code in 1 and empty others */
@@ -491,23 +525,7 @@ void setup() {
   operation_mode=ENTER_ALARM_CODE;
   failed_attempts=0; 
 
-  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
-  mqttClient.setCallback(callback);
-
-  int retrycount=1;
-  boolean is_connected=false;
-  while (retrycount <= 10 && !is_connected)
-  {
-    delay(retrycount*1000L);
-    if (connectMQTT()) {
-      Serial.println("Connected to MQTT server");
-      light_mode=0;
-      is_connected=true;
-    } else {
-      light_mode=1;
-    }
-    retrycount++;
-  }
+  ip_and_mqtt_setup();
 
   pinMode(RED_PIN, OUTPUT);
   updateDiode(RED_PIN, LOW);
@@ -515,7 +533,9 @@ void setup() {
   updateDiode(GREEN_PIN, LOW);
 
   currentDelayEntry = 0;
-  currentDelayExit = 0;            
+  currentDelayExit = 0;
+
+  currentNetworkWatchdog = millis();
 }
 
 void loop() {
