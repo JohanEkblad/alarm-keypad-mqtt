@@ -42,8 +42,8 @@ const int GREEN_PIN=A1;
 const int EEPROMPOS=0; // Where to start save EEPROM;
 const int MAGIC0=47;   // Magic key in EEPROM start
 const int MAGIC1=11;    // Magic key in EEPROM start+1
-const int MAX_CODE_LENGTH=9; // Max number of chars in code
-const int MIN_CODE_LENGTH=4; // Min number of chars in code
+const int MAX_CODE_LENGTH=9; // Max number of digits in code
+const int MIN_CODE_LENGTH=4; // Min number of digits in code
 const int MAX_NUMBER_OF_CODES=4; // Max number of codes stored (do not change to more than 9)
 const int MAX_NUMBER_OF_FAILED_ATTEMPTS=3; // Max number of failed attempts before turning on alarm
 
@@ -63,6 +63,9 @@ const int CODE_FAIL=4; // Sub command number of failed attempts
 const int CODE_CHANGED=5; // Sub command with the register changed
 const int OPERATION_ERROR=6; // Sent when wrong code or wrong register in change code
 
+const char *operation[7]={MQTT_ALARM_MODE_ON, MQTT_ALARM_MODE_OFF, MQTT_ALARM_ON, MQTT_ALARM_OFF, 
+                          "CODE_FAIL", "CODE_CHANGED", "OPERATION_ERROR"};
+
 const char * MQTT_SERVER="ip-for-your-mqtt-server";
 const int    MQTT_PORT=1883;
 const char * MQTT_USERNAME="username-for-your-mqtt-server";
@@ -73,10 +76,10 @@ const char * MQTT_TOPIC_OUT="keypad_out";
 const char * MQTT_CLIENT_ID="arduino-1";
 
 
-const byte ROWS = 4; //four rows
-const byte COLS = 3; //four columns
+const byte KEYPAD_ROWS = 4; //four rows
+const byte KEYPAD_COLS = 3; //four columns
 //define the symbols on the buttons of the keypads
-char keyMap[ROWS][COLS] = {
+char keyMap[KEYPAD_ROWS][KEYPAD_COLS] = {
 {'1','2','3'},
 {'4','5','6'},
 {'7','8','9'},
@@ -85,16 +88,16 @@ char keyMap[ROWS][COLS] = {
 char codes[MAX_NUMBER_OF_CODES][MAX_CODE_LENGTH+1]; // codes are cached in this variable
 char str[MAX_CODE_LENGTH+1];
 bool alreadyPressed=false;
-// Position 1-7 goes to arduino digital pin 9-3
-byte rowPins[ROWS] = {8, 3, 4, 6}; //connect to the row pinouts of the keypad
-byte colPins[COLS] = {7, 9, 5};    //connect to the column pinouts of the keypad
+// Position 1-7 on the keypad goes to arduino digital pin 9-3
+byte rowPins[KEYPAD_ROWS] = {8, 3, 4, 6}; //connect to the row pinouts of the keypad
+byte colPins[KEYPAD_COLS] = {7, 9, 5};    //connect to the column pinouts of the keypad
 //initialize an instance of class NewKeypad
-Keypad customKeypad = Keypad(makeKeymap(keyMap), rowPins, colPins, ROWS, COLS); 
+Keypad customKeypad = Keypad(makeKeymap(keyMap), rowPins, colPins, KEYPAD_ROWS, KEYPAD_COLS); 
 int operation_mode; /* ENTER_ALARM_CODE, ENTER_CHANGE_CODE, ENTER_CHANGE_REGISTER, ENTER_NEW_CODE */
-int entered_register=0; /* 1,2,3 are valid values */
+int entered_register=0; /* 1,...,MAX_NUMBER_OF_CODES are valid values */
 int failed_attempts=0; /* Number of failed code attempts */
 
-byte mac[] = {0x2A, 0x27, 0x55, 0x08, 0x1E, 0x7A};
+byte mac[] = {0x2A, 0x27, 0x55, 0x08, 0x1E, 0x7A}; // I just use a random number here
 
 int light_mode=0; // 0=normal (green), 1=network fail(green blink), 2=armed(red), 4=alarm(red blink)
                   // Also some combination: 3=armed+network fail, 5=alarm+network fail
@@ -111,11 +114,11 @@ int     delayEntry=60; // If the MQTT message ENTER is recieved in the keypad_in
 int     delayExit=60;  // If '*' is pressed at the keypad, wait for delayExit seconds before the 
                        // ALARM_MODE_ON is sent
 
-unsigned long currentDelayEntry = 0;
-unsigned long currentDelayExit = 0;                   
+int     networkWatchdog=60; // Check network connection each networkWatchdog seconds, 0 = skip check
 
-int     networkWatchdog=60; // Check network 
-unsigned long currentNetworkWatchdog = 0;
+unsigned long currentDelayEntry = 0L;
+unsigned long currentDelayExit = 0L;                   
+unsigned long currentNetworkWatchdog = 0L;
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
@@ -143,7 +146,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       Serial.println("Turn off alarms, wait for password");
       sendCommand(ALARM_MODE_OFF, 9);
       sendCommand(ALARM_OFF, 9);
-      currentDelayEntry=millis();    
+      currentDelayEntry=millis() / 1000L;    
     } else {
       Serial.println("Got ENTER, not armed - ignoring");
     }
@@ -162,7 +165,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
       light_mode=2+(light_mode % 2);
     }
     reset_data(payloadstr);
-    currentDelayExit=0;
+    currentDelayExit=0L;
     updateDiode(RED_PIN, HIGH);
     sendCommand(ALARM_MODE_ON, 9);
   } else if (strcmp(MQTT_ALARM_ON,payloadstr) == 0) {  
@@ -189,7 +192,7 @@ boolean connectMQTT() {
       }
       return r2;
     } else {
-        Serial.print("Failed connect to mqtt server");
+        Serial.println("Failed connect to mqtt server");
         return false;
     }
   }
@@ -234,6 +237,7 @@ void readEEPROMString(int reg) {
   codes[reg-1][pos]='\0';
 }
 
+// Returns the register for the correct code or 0 if not correct
 int isCodeCorrect(char *enteredCode) {
   for (int i=0; i<MAX_NUMBER_OF_CODES; i++) {
     if (strcmp(codes[i], enteredCode) == 0) {
@@ -245,45 +249,32 @@ int isCodeCorrect(char *enteredCode) {
 
 void sendCommand(int cmd, int subcmd) {
 
-  char *data; 
-
-  if (cmd == ALARM_MODE_ON) {
-    data=MQTT_ALARM_MODE_ON;
-    light_mode=2+(light_mode % 2);
-  } else if (cmd == ALARM_MODE_OFF) {
-    data=MQTT_ALARM_MODE_OFF;
-    light_mode=(light_mode % 2);
-  } else if (cmd == ALARM_ON) {
-    data=MQTT_ALARM_ON;
-    light_mode=4+(light_mode % 2);
-  } else if (cmd == ALARM_OFF) {
-    data=MQTT_ALARM_OFF;
-    light_mode=(light_mode % 2);
-  } else if (cmd == CODE_FAIL) {
-    data="CODE_FAIL";
-  } else if (cmd == CODE_CHANGED) {
-    data="CODE_CHANGED";
-  } else if (cmd == OPERATION_ERROR) {
-    data="OPERATION_ERROR";
-  } else {
-    data="UNKNOWN_OPERATION";
+  switch (cmd) {
+    case ALARM_MODE_ON  : light_mode = 2 + (light_mode % 2);
+                          break;
+    case ALARM_MODE_OFF :
+    case ALARM_OFF      : light_mode = (light_mode % 2);
+                          break;
+    case ALARM_ON       : light_mode = 4 + (light_mode % 2);
   }
 
   if (connectMQTT()) {
+    // Go from unconnected to connectecd
     if ((light_mode % 2) == 1) {
       light_mode=light_mode-1;
       updateDiode(GREEN_PIN, HIGH);
     }
   } else {
+    // Go from connected to unconnected
     if ((light_mode % 2) == 0) {
       light_mode=light_mode+1;
     }
   }
   
-  Serial.print(data);
+  Serial.print(operation[cmd]);
   Serial.print(" ");
   Serial.println(subcmd);
-  boolean rc = mqttClient.publish(MQTT_TOPIC_OUT, data);
+  boolean rc = mqttClient.publish(MQTT_TOPIC_OUT, operation[cmd]);
   Serial.print("MQTT sent rc=");
   Serial.println(rc);
   Serial.print("light_mode=");
@@ -291,8 +282,8 @@ void sendCommand(int cmd, int subcmd) {
 }
 
 void fix_led_lights() {
-    // green
-  if (light_mode == 0) // green
+  // green
+  if (light_mode == 0)
   {
     if (!green_status) {
       updateDiode(GREEN_PIN, HIGH);
@@ -326,7 +317,7 @@ void fix_led_lights() {
   }
 
   if (currentDelayExit > 0 || currentDelayEntry > 0) {
-    if (red_status == true) {
+    if (red_status) {
       delay(85);
     } else {
       delay(15);
@@ -337,31 +328,47 @@ void fix_led_lights() {
 }
 
 void checkDelayedActions() {
+
+  unsigned long now_s = millis() / 1000L;
   
   if (currentDelayExit > 0) {
-    if ((currentDelayExit + ((long)delayExit)*1000L) < millis()) {
+    if (now_s - currentDelayExit < 0) { // Wrap around, set currentDelayExit again...
+      currentDelayExit = now_s;
+    }
+    
+    if ((currentDelayExit + (long)delayExit) < now_s) {
       Serial.println("Activating alarm mode after delay");
       sendCommand(ALARM_MODE_ON, 0);
-      currentDelayExit=0;
+      currentDelayExit=0L;
     }
   }
 
   if (currentDelayEntry > 0) {
-    if ((currentDelayEntry + ((long)delayEntry)*1000L) < millis()) {
+
+    if (now_s - currentDelayEntry < 0) { // Wrap around, set currentDelayEntry again...
+      currentDelayEntry = now_s;
+    }
+    
+    if ((currentDelayEntry + (long)delayEntry) < now_s) {
       Serial.println("Wrong code entered, delayed entry expired => alarm");
       sendCommand(ALARM_MODE_ON, 0);
       sendCommand(ALARM_ON, 0);
-      currentDelayEntry=0;
+      currentDelayEntry=0L;
     }
   }
 
   if (networkWatchdog > 0) {
-    if ((currentNetworkWatchdog + ((long) networkWatchdog)*1000L) < millis()) {
+
+    if (now_s - currentNetworkWatchdog < 0) { // Wrap around, set currentNetworkWatchdog again...
+      currentNetworkWatchdog = now_s;
+    }
+    
+    if ((currentNetworkWatchdog + (long) networkWatchdog) < now_s) {
       Serial.println("Network watchdog");
       if (!connectMQTT()) {
         ip_and_mqtt_setup();
       }
-      currentNetworkWatchdog=millis();
+      currentNetworkWatchdog=millis() / 1000L; // Might have passed some time, so don't use now_s
     }
   }
 }
@@ -372,23 +379,23 @@ void mark_error() {
   updateDiode(RED_PIN, LOW);
 }
 
-void state_enter_alarm_code() {
+void state_enter_alarm_code(char *str) {
   // If str is empty, turn on alarm
   if (strlen(str) == 0) {
-    if (delayExit > 0) {
+    if (delayExit > 0 && (delayEntry == 0 || currentDelayEntry == 0)) { // Possible delay exit but not in delay entry
       if (currentDelayExit == 0) {
         if (light_mode / 2 == 1) { // We are already armed, be consistent and send again
           sendCommand(ALARM_MODE_ON, 0);
         } else {
-          currentDelayExit=millis();
+          currentDelayExit=millis() / 1000L;
           Serial.print("Enter delay exit");
         }
       } else {
-        currentDelayExit = 0;
+        currentDelayExit = 0L;
         Serial.println("Removing delay exit");
         updateDiode(RED_PIN, LOW);
       }
-    } else {
+    } else if (delayEntry == 0 || currentDelayEntry == 0) { // Ignore if we are in a delay entry
      sendCommand(ALARM_MODE_ON, 0);
     }
   } else {
@@ -399,12 +406,12 @@ void state_enter_alarm_code() {
       failed_attempts=0;
       // Turn off red led light
       updateDiode(RED_PIN, LOW);
-      currentDelayEntry=0; // Always turn off delay entry mode    
+      currentDelayEntry=0L; // Always turn off delay entry mode    
     } else {
       failed_attempts++;
       if (failed_attempts >= MAX_NUMBER_OF_FAILED_ATTEMPTS) {
         sendCommand(ALARM_ON, 0);
-        currentDelayEntry=0;
+        currentDelayEntry=0L;
       } else {
         sendCommand(CODE_FAIL, failed_attempts);
         mark_error();
@@ -413,7 +420,7 @@ void state_enter_alarm_code() {
   }
 }
 
-void state_enter_change_code() {
+void state_enter_change_code(char *str) {
   if (strlen(str) == 0) {
     sendCommand(OPERATION_ERROR, 0);
     mark_error();
@@ -437,7 +444,7 @@ void state_enter_change_code() {
   }
 }
 
-void state_enter_change_register() {
+void state_enter_change_register(char *str) {
   if (strlen(str) == 0) {
     sendCommand(OPERATION_ERROR, 1);
     mark_error();
@@ -455,7 +462,7 @@ void state_enter_change_register() {
   }
 }
 
-void state_enter_new_code() {
+void state_enter_new_code(char *str) {
   if (strlen(str) == 0) { // It would be possible to clear a code this way, not implemented now
     sendCommand(OPERATION_ERROR, 3);
     mark_error();
@@ -471,9 +478,9 @@ void state_enter_new_code() {
 }
 
 void ip_and_mqtt_setup() {
-    //Fixed ip, gw and subnetmask (saves 114 bytes in Global variables memory)
-  //IPAddress myIP(192, 168, 10, 5);
-  //IPAddress gateway(192, 168, 10, 1);
+  //Fixed ip, gw and subnetmask (saves 114 bytes in Global variables memory)
+  //IPAddress myIP(192, 168, 0, 5);
+  //IPAddress gateway(192, 168, 0, 1);
   //IPAddress subnet(255, 255, 255, 0);
   //Ethernet.begin(mac, myIP, gateway, subnet);
   
@@ -532,10 +539,10 @@ void setup() {
   pinMode(GREEN_PIN, OUTPUT);
   updateDiode(GREEN_PIN, LOW);
 
-  currentDelayEntry = 0;
-  currentDelayExit = 0;
+  currentDelayEntry = 0L;
+  currentDelayExit = 0L;
 
-  currentNetworkWatchdog = millis();
+  currentNetworkWatchdog = millis() / 1000L;
 }
 
 void loop() {
@@ -551,19 +558,19 @@ void loop() {
   if (state == PRESSED && !alreadyPressed) {
     alreadyPressed=true;
     if (customKey == '#') {
-      Serial.println("In #");
-      operation_mode=ENTER_CHANGE_CODE;
+      if ((delayEntry == 0 || currentDelayEntry == 0) && (delayExit == 0 || currentDelayExit == 0)) { // don't change code in delay Entry/Exit
+        operation_mode=ENTER_CHANGE_CODE;
+      }
       str[0]='\0';
     } else if (customKey == '*') {
-      Serial.println("In *");
       if (operation_mode == ENTER_ALARM_CODE) {
-        state_enter_alarm_code();
+        state_enter_alarm_code(str);
       } else if (operation_mode == ENTER_CHANGE_CODE) {
-        state_enter_change_code();
+        state_enter_change_code(str);
       } else if (operation_mode == ENTER_CHANGE_REGISTER) {
-        state_enter_change_register();
+        state_enter_change_register(str);
       } else if (operation_mode == ENTER_NEW_CODE) {
-        state_enter_new_code();
+        state_enter_new_code(str);
       } else {
         sendCommand(OPERATION_ERROR, 5);
         operation_mode=ENTER_ALARM_CODE;
