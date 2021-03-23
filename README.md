@@ -1,7 +1,7 @@
 # alarm-keypad-mqtt
 A program written for arduino ethernet, having a keypad and two light diodes connected. It is sending and receiving MQTT messages and is used to control an alarm. An example how to integrate with Home Assistant is provided. You can save up to nine different alarm codes in the EEPROM.
 
-![Keypad setup](https://ekblad.org/keypad.jpg)
+![Keypad setup](https://ekblad.org/ha/keypad.jpg)
 
 Keypad commands:
 
@@ -69,5 +69,41 @@ If you have a magnet sensor on the front door, you might want to send a MQTT mes
     data:
       topic: keypad_in
       payload: ENTER
+  mode: single
+```
+
+Here is another example how to starting to playing an ambulance sound on the squeezebox when the alarm is triggered and stop when alarm is turned off, add this in `config/automations.yaml`:
+```
+- alias: Start Alarm
+  description: ''
+  trigger:
+  - platform: mqtt
+    topic: keypad_out
+    payload: ALARM_ON
+  condition: []
+  action:
+  - service: squeezebox.call_method
+    data:
+      entity_id: media_player.squeezebox_classic
+      command: playlist
+      parameters:
+      - play
+      - loop://content.mysqueezebox.com/static/sounds/effects/ambulance.mp3
+    entity_id: media_player.squeezebox_classic
+  mode: single
+
+- alias: Stop Alarm
+  description: ''
+  trigger:
+  - platform: mqtt
+    topic: keypad_out
+    payload: ALARM_OFF
+  condition: []
+  action:
+  - service: squeezebox.call_method
+    data:
+      entity_id: media_player.squeezebox_classic
+      command: stop
+    entity_id: media_player.squeezebox_classic
   mode: single
 ```
