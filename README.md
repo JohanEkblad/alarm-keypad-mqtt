@@ -107,3 +107,33 @@ Here is another example how to starting to playing an ambulance sound on the squ
     entity_id: media_player.squeezebox_classic
   mode: single
 ```
+And here is an example how to get a bunch of of motion sensors to trigger the alarm, add this in the `config/automations.yaml`:
+```
+- id: '1616621337300'
+  alias: Trigger alarm
+  description: ''
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ikea_of_sweden_tradfri_motion_sensor_01234567_on_off
+    to: 'on'
+  - platform: state
+    entity_id: binary_sensor.ikea_of_sweden_tradfri_motion_sensor_01234568_on_off
+    to: 'on'
+  - platform: state
+    entity_id: binary_sensor.ikea_of_sweden_tradfri_motion_sensor_01234569_on_off
+    to: 'on'
+  - platform: state
+    entity_id: binary_sensor.ikea_of_sweden_tradfri_motion_sensor_0123456a_on_off
+    to: 'on'
+  condition:
+  - condition: state
+    entity_id: switch.arming
+    state: 'on'
+  action:
+  - service: mqtt.publish
+    data:
+      topic: keypad_in
+      payload: ALARM_ON
+  mode: single
+
+```
