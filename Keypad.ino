@@ -367,6 +367,19 @@ void checkDelayedActions() {
       Serial.println("Network watchdog");
       if (!connectMQTT()) {
         ip_and_mqtt_setup();
+        if (connectMQTT()) {
+          if (light_mode % 2 == 1) {
+            light_mode = light_mode - 1;
+          }
+        } else {
+          if (light_mode % 2 == 0) {
+            light_mode = light_mode + 1;
+          }
+        }
+      } else {
+        if (light_mode % 2 == 1) {
+            light_mode = light_mode - 1;
+        }
       }
       currentNetworkWatchdog=millis() / 1000L; // Might have passed some time, so don't use now_s
     }
@@ -496,10 +509,14 @@ void ip_and_mqtt_setup() {
     delay(retrycount*1000L);
     if (connectMQTT()) {
       Serial.println("Connected to MQTT server");
-      light_mode=0;
+      if (light_mode % 2 == 1) {
+        light_mode = light_mode - 1;
+      }
       is_connected=true;
     } else {
-      light_mode=1;
+      if (light_mode % 2 == 0) {
+        light_mode = light_mode + 1;
+      }
     }
     retrycount++;
   }
