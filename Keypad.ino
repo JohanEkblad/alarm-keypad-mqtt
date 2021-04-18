@@ -19,6 +19,8 @@
  * 
  * The Keypad communicates with a MQTT server, it subscribes to topic MQTT_TOPIC_IN 
  * and send data to topic MQTT_TOPIC_OUT
+ * 
+ * Current arduino: Ethernet
  */
 
 #include <Wire.h>
@@ -115,6 +117,7 @@ int     delayExit=60;  // If '*' is pressed at the keypad, wait for delayExit se
                        // ALARM_MODE_ON is sent
 
 int     networkWatchdog=60; // Check network connection each networkWatchdog seconds, 0 = skip check
+boolean firstTime=true;
 
 unsigned long currentDelayEntry = 0L;
 unsigned long currentDelayExit = 0L;                   
@@ -226,7 +229,8 @@ void readEEPROMString(int reg) {
   if (magic0 != MAGIC0 || magic1 != MAGIC1)
   {
     Serial.println("No saved EEPROM data");
-    return "";
+    codes[reg-1][0]='\0';
+    return;
   }
   int pos=0;
   char ch;
@@ -359,11 +363,18 @@ void checkDelayedActions() {
 
   if (networkWatchdog > 0) {
 
-    if (now_s - currentNetworkWatchdog < 0) { // Wrap around, set currentNetworkWatchdog again...
-      currentNetworkWatchdog = now_s;
+    if (firstTime) {
+      ip_and_mqtt_setup();
+      currentNetworkWatchdog = millis() / 1000L; // Might have passed some time, so don't use now_s
+      firstTime=false;
+      return;
     }
     
-    if ((currentNetworkWatchdog + (long) networkWatchdog) < now_s) {
+    if (now_s - currentNetworkWatchdog < 0) { // Wrap around, set currentDelayEntry again...
+      currentNetworkWatchdog = now_s;
+    }
+
+    if ((currentNetworkWatchdog + (long)networkWatchdog) < now_s) {
       Serial.println("Network watchdog");
       if (!connectMQTT()) {
         ip_and_mqtt_setup();
@@ -504,8 +515,14 @@ void ip_and_mqtt_setup() {
 
   int retrycount=1;
   boolean is_connected=false;
+
   while (retrycount <= 10 && !is_connected)
   {
+    if (retrycount % 2 == 1) {
+      updateDiode(GREEN_PIN, HIGH);  
+    } else {
+      updateDiode(GREEN_PIN, LOW);
+    }
     delay(retrycount*1000L);
     if (connectMQTT()) {
       Serial.println("Connected to MQTT server");
@@ -520,11 +537,11 @@ void ip_and_mqtt_setup() {
     }
     retrycount++;
   }
+  updateDiode(GREEN_PIN, HIGH);
 }
 
 void setup() {
   Serial.begin(9600);
-
 
   readEEPROMString(1);
   if (strlen(codes[0]) == 0) /* You must have code 1 set otherwise set default code in 1 and empty others */
@@ -549,7 +566,11 @@ void setup() {
   operation_mode=ENTER_ALARM_CODE;
   failed_attempts=0; 
 
-  ip_and_mqtt_setup();
+  if (networkWatchdog == 0) { // Init network now, otherwise let the watchdog trigger it first thing in the loop
+    ip_and_mqtt_setup();
+  }
+  currentNetworkWatchdog = millis() / 1000L;
+  firstTime = true;
 
   pinMode(RED_PIN, OUTPUT);
   updateDiode(RED_PIN, LOW);
@@ -558,18 +579,16 @@ void setup() {
 
   currentDelayEntry = 0L;
   currentDelayExit = 0L;
-
-  currentNetworkWatchdog = millis() / 1000L;
 }
 
 void loop() {
 
   fix_led_lights();
 
+  checkDelayedActions();
+
   mqttClient.loop();
 
-  checkDelayedActions();
-  
   char customKey = customKeypad.getKey();
   KeyState state = customKeypad.getState();
   if (state == PRESSED && !alreadyPressed) {
